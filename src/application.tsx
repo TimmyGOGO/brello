@@ -1,5 +1,12 @@
 import { useState } from "react";
+
+import { DragDropContext, Draggable, Droppable, OnDragEndResponder } from "@hello-pangea/dnd";
+import { ActionIcon, Group } from "@mantine/core";
+import { IconCheck, IconPencil, IconTrash, IconX } from "@tabler/icons-react";
 import cn from "clsx";
+import { nanoid } from "nanoid";
+
+import "@mantine/core/styles/ActionIcon.css";
 
 import styles from "./application.module.css";
 import { Button } from "./button";
@@ -11,12 +18,8 @@ import { Textarea } from "./textarea";
 const user = {
   name: "Jane Spoonfighter",
   email: "janspoon@fighter.dev",
-  image:
-    "https://raw.githubusercontent.com/mantinedev/mantine/master/.demo/avatars/avatar-5.png",
+  image: "https://raw.githubusercontent.com/mantinedev/mantine/master/.demo/avatars/avatar-5.png",
 };
-
-const TAB_DEFAULT = "Board";
-const tabs = [TAB_DEFAULT, "Members", "Settings"];
 
 export const Application = () => {
   return (
@@ -40,133 +43,279 @@ export function Header() {
   );
 }
 
+type KanbanList = {
+  id: string;
+  title: string;
+  cards: KanbanCard[];
+};
+
+type KanbanCard = {
+  id: string;
+  title: string;
+};
+
+type KanbanBoard = KanbanList[];
+
+const INITIAL_BOARD: KanbanList[] = [
+  {
+    id: nanoid(),
+    title: "To Do",
+    cards: [
+      { id: nanoid(), title: "Setup the Workplace" },
+      { id: nanoid(), title: "Review opened issues" },
+    ],
+  },
+  {
+    id: nanoid(),
+    title: "In Progress",
+    cards: [{ id: nanoid(), title: "Implement Kanban feature" }],
+  },
+  {
+    id: nanoid(),
+    title: "Done",
+    cards: [{ id: nanoid(), title: "Initialized project" }],
+  },
+];
+
+function cardMove(
+  board: KanbanBoard,
+  sourceColumnId: string,
+  destinationColumnId: string,
+  fromIndex: number,
+  toIndex: number,
+): KanbanBoard {
+  const sourceColumnIndex = board.findIndex((column) => column.id === sourceColumnId);
+  const destinationColumnIndex = board.findIndex((column) => column.id === destinationColumnId);
+
+  const sourceColumn = board[sourceColumnIndex];
+  const destinationColumn = board[destinationColumnIndex];
+
+  const card = sourceColumn.cards[fromIndex];
+
+  const updatedSourceColumn = { ...sourceColumn, cards: sourceColumn.cards.filter((_, index) => index !== fromIndex) };
+  const updatedDestinationColumn = {
+    ...destinationColumn,
+    cards: [...destinationColumn.cards.slice(0, toIndex), { ...card }, ...destinationColumn.cards.slice(toIndex)],
+  };
+
+  return board.map((column) => {
+    if (column.id === sourceColumnId) {
+      return updatedSourceColumn;
+    }
+
+    if (column.id === destinationColumnId) {
+      return updatedDestinationColumn;
+    }
+
+    return column;
+  });
+}
+
+function listReorder(list: KanbanList, startIndex: number, endIndex: number): KanbanList {
+  const cards = Array.from(list.cards);
+  const [removed] = cards.splice(startIndex, 1);
+  cards.splice(endIndex, 0, removed);
+
+  return { ...list, cards };
+}
+
 function Board() {
+  const [board, setBoard] = useState(INITIAL_BOARD);
+
+  const onDragEnd: OnDragEndResponder = ({ source, destination }) => {
+    if (!destination) {
+      // Dropped outside of a column
+      return;
+    }
+
+    const sourceId = source.droppableId;
+    const destinationId = destination.droppableId;
+
+    const insideTheSameColumn = sourceId === destinationId;
+    if (insideTheSameColumn) {
+      const column = board.find((column) => column.id === sourceId);
+      if (column) {
+        const reorderedList = listReorder(column, source.index, destination.index);
+        const updatedBoard = board.map((item) => (item.id === sourceId ? reorderedList : item));
+        setBoard(updatedBoard);
+      }
+    } else {
+      const updatedBoard = cardMove(board, sourceId, destinationId, source.index, destination.index);
+      setBoard(updatedBoard);
+    }
+  };
+
+  function onCreateCard(card: KanbanCard, columnId: string) {
+    const updatedBoard = board.map((column) => {
+      if (column.id === columnId) {
+        return { ...column, cards: [...column.cards, card] };
+      }
+
+      return column;
+    });
+
+    setBoard(updatedBoard);
+  }
+
+  function onColumnUpdate(updatedList: KanbanList) {
+    const updatedBoard = board.map((column) => (column.id === updatedList.id ? updatedList : column));
+    setBoard(updatedBoard);
+  }
+
   return (
-    <section className={cn(containerStyles, styles.section)}>
+    <section className={styles.section}>
       <header className={styles.headerSection}>
         <h1 className={styles.title}>Sprint #1</h1>
       </header>
-      <div className={cn(styles.grid, customScrollStyles)}>
-        <KanbanColumn
-          title="To Do"
-          issues={[
-            {
-              id: "a8d2c2b1-3d4b-4f19-b915-4530d8f693d4",
-              text: "Set up project repository",
-            },
-            {
-              id: "b7f9285d-c78a-4f25-9b60-7edbfcf06335",
-              text: "Research best practices for Kanban board implementation",
-            },
-            {
-              id: "d467f865-d378-4a6f-bd4a-611c5d1de939",
-              text: "Create initial components for UI",
-            },
-            {
-              id: "ae44a1cb-cb8b-4e5a-bcc8-4888c1822146",
-              text: "Design logo and branding",
-            },
-            {
-              id: "92f84ba6-f354-4d1b-8e23-dc75be0ffba3",
-              text: "Write unit tests for core features",
-            },
-            {
-              id: "98ff4789-e9ad-4d88-8259-24972c6f132e",
-              text: "Prepare project documentation",
-            },
-            {
-              id: "32f8b8ea-95de-4d1e-8ae6-517877db8f7b",
-              text: "Plan webinar content for week 1",
-            },
-          ]}
-        />
-        <KanbanColumn
-          title="In Progress"
-          issues={[
-            {
-              id: "c3d3a66f-6eb5-46ec-a07e-c8436886272f",
-              text: "Develop Board component",
-            },
-          ]}
-        />
-        <KanbanColumn
-          title="Done"
-          issues={[
-            {
-              id: "843a6832-f9f2-43b1-bd6f-ef27b87f1b64",
-              text: "Install project dependencies",
-            },
-            {
-              id: "fdd854a2-b31d-4ed5-b18d-2c44c0cfb444",
-              text: "Set up ESLint and Prettier",
-            },
-            {
-              id: "f2deaba9-7e52-442a-b764-219849af07e8",
-              text: "Configure Webpack for project",
-            },
-            {
-              id: "b90b7d41-1ba2-4b44-b7d9-9a2a8b237d4b",
-              text: "Create responsive layout for Kanban board",
-            },
-            {
-              id: "e823d3ac-bdfd-4410-b49f-41719734b7b8",
-              text: "Implement user authentication",
-            },
-            {
-              id: "620f509d-d192-45d1-9f43-2ed1c49f0c6f",
-              text: "Deploy app on Vercel",
-            },
-            {
-              id: "a1dbf9b4-2523-45b5-b8a3-1af00c7fbe6e",
-              text: "Set up CI/CD pipeline",
-            },
-            {
-              id: "7761eccc-765f-49a7-8474-46b0be8058d2",
-              text: "Add basic styling for header",
-            },
-            {
-              id: "b0b2c8e3-2299-4ef9-b7cb-88f28fc2f72b",
-              text: "Integrate Telegram group for support",
-            },
-            {
-              id: "d4d6adbc-7d4e-4d1d-b9b9-8be91b776cb2",
-              text: "Fix bug with form submission",
-            },
-          ]}
-        />
-      </div>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div className={cn(styles.board, customScrollStyles)}>
+          {board.map((column) => (
+            <KanbanColumn
+              key={column.id}
+              id={column.id}
+              title={column.title}
+              cards={column.cards}
+              onUpdate={onColumnUpdate}
+            >
+              <KanbanCreateCard onCreate={(card) => onCreateCard(card, column.id)} />
+            </KanbanColumn>
+          ))}
+        </div>
+      </DragDropContext>
     </section>
   );
 }
 
-interface Issue {
+function KanbanColumn({
+  id,
+  title,
+  cards,
+  children,
+  onUpdate,
+}: {
   id: string;
-  text: string;
-}
+  title: string;
+  cards: KanbanCard[];
+  children?: React.ReactNode;
+  onUpdate: (updatedList: KanbanList) => void;
+}) {
+  function onCardEdit(updatedCard: KanbanCard) {
+    const updatedCards = cards.map((card) => (card.id === updatedCard.id ? updatedCard : card));
+    onUpdate({ id, title, cards: updatedCards });
+  }
 
-function KanbanColumn({ title, issues }: { title: string; issues: Issue[] }) {
-  const [, setValue] = useState<string>("");
+  function onCardDelete(cardId: string) {
+    const updatedCards = cards.filter((card) => card.id !== cardId);
+    onUpdate({ id, title, cards: updatedCards });
+  }
 
   return (
-    <div className={styles.column}>
-      <p className={styles.columnTitle}>{title}</p>
-      <div className={styles.list}>
-        {issues.map(({ id, text }) => (
-          <KanbanCard key={id} text={text} />
-        ))}
-        <form className={styles.form}>
-          <Textarea onValue={setValue} placeholder="Type some text here" />
-          <Button>Add card</Button>
-        </form>
+    <Droppable key={id} droppableId={id}>
+      {(provided) => (
+        <div ref={provided.innerRef} className={styles.column} {...provided.droppableProps}>
+          <p className={styles.columnTitle}>{title}</p>
+          <div className={styles.list}>
+            {cards.map(({ id, title }, index) => (
+              <KanbanCard
+                key={id}
+                id={id}
+                index={index}
+                title={title}
+                onEdit={onCardEdit}
+                onDelete={() => onCardDelete(id)}
+              />
+            ))}
+            {provided.placeholder}
+            {children}
+          </div>
+        </div>
+      )}
+    </Droppable>
+  );
+}
+function KanbanCard({
+  id,
+  index,
+  title,
+  onEdit,
+  onDelete,
+}: {
+  id: string;
+  index: number;
+  title: string;
+  onEdit: (card: KanbanCard) => void;
+  onDelete: () => void;
+}) {
+  const [editTitle, setEditTitle] = useState(title);
+  const [editMode, setEditMode] = useState(false);
+
+  function onReset() {
+    setEditTitle(title);
+    setEditMode(false);
+  }
+
+  function onEditFinished() {
+    onEdit({ id, title: editTitle });
+    onReset();
+  }
+
+  if (editMode) {
+    return (
+      <div className={styles.item}>
+        <Textarea variant="md" value={editTitle} onValue={setEditTitle} />
+        <Group>
+          <ActionIcon onClick={onEditFinished}>
+            <IconCheck size={14} />
+          </ActionIcon>
+          <ActionIcon onClick={onReset}>
+            <IconX size={14} />
+          </ActionIcon>
+        </Group>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <Draggable key={id} draggableId={id} index={index}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          {...provided.dragHandleProps}
+          className={cn(styles.item, snapshot.isDragging ? styles.dragging : null)}
+        >
+          <p className={styles.itemText}>{title}</p>
+          <Group>
+            <ActionIcon onClick={() => setEditMode(true)}>
+              <IconPencil size={14} />
+            </ActionIcon>
+            <ActionIcon onClick={() => onDelete()}>
+              <IconTrash size={14} />
+            </ActionIcon>
+          </Group>
+        </div>
+      )}
+    </Draggable>
   );
 }
 
-function KanbanCard({ text }: { text: string }) {
+function KanbanCreateCard({ onCreate }: { onCreate: (card: KanbanCard) => void }) {
+  const [title, setTitle] = useState("");
+
+  function onReset() {
+    setTitle("");
+  }
+
+  function onSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    onCreate({ id: nanoid(), title });
+    onReset();
+  }
+
   return (
-    <div className={styles.item}>
-      <p className={styles.itemText}>{text}</p>
-    </div>
+    <form className={styles.form} onSubmit={onSubmit}>
+      <Textarea variant="md" value={title} onValue={setTitle} placeholder="Start making new card here" />
+      <Button type="submit">Add card</Button>
+    </form>
   );
 }
